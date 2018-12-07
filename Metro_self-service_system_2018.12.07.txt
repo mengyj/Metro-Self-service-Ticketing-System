@@ -1,0 +1,196 @@
+module perfectsystem (
+ clk,
+ RESET,                       //复位清零键
+ FINISH,                      //确认键
+ station_in_2,station_in_1,   //对应车站数的十位、个位，及BTN2,BTN1
+ tic_in,                      //票数 	BTN0
+ coin_10,coin_5,coin_1,       //10,5,1元纸币  BTN5,BTN4,BTN3
+ station_ou_2,station_ou1,    //已选车站数的十位和各位，对应数码管DISP3,DISP2
+ tic_ou,                      //当前票数显示，对应数码管DISP0
+ money_3,money_2,money_1      //当前投入钱币数的百位、十位、个位，对应数码管DISP7,DISP6,DISP5	
+ );
+input RESET,FINISH,station_in_2,station_in_1,tic_in,coin_10,coin_5,coin_1;
+output station_ou_2,station_ou1,tic_ou,money_3,money_2,money_1 ;
+
+
+
+endmodule
+
+
+/*******偶分频*******/
+/**M是分频系数，M=时钟输入频率/时钟输出频率
+   N是计数器值，N=M/2
+   WIDTH为（N的位宽-1）***/
+module time_adv_even #(
+parameter N=2,
+	WIDTH =7
+)
+(
+    input clk,
+    input rst,
+    output reg clk_out
+    );
+
+reg [WIDTH:0]counter;
+always @(posedge clk or posedge rst) begin
+	if (rst) begin
+		// reset
+		counter <= 0;
+	end
+	else if (counter == N-1) begin
+		counter <= 0;
+	end
+	else begin
+		counter <= counter + 1;
+	end
+end
+
+always @(posedge clk or posedge rst) begin
+	if (rst) begin
+		// reset
+		clk_out <= 0;
+	end
+	else if (counter == N-1) begin
+		clk_out <= !clk_out;
+	end
+end
+
+endmodule
+
+
+
+
+
+
+
+
+
+/****消抖****/
+
+module xiaodou(
+BJ_CLK, //采集时钟，40Hz
+RESET, //系统复位信号
+BUTTON_IN, //按键输入信号
+BUTTON_OUT //消抖后的输出信号
+);
+input BJ_CLK;
+input RESET;
+input BUTTON_IN;
+output BUTTON_OUT;
+reg BUTTON_IN_Q, BUTTON_IN_2Q, BUTTON_IN_3Q;
+always @(posedge BJ_CLK or negedge RESET)
+begin
+if(~RESET)
+begin
+BUTTON_IN_Q <= 1'b1;
+BUTTON_IN_2Q <= 1'b1;
+BUTTON_IN_3Q <= 1'b1;
+end
+else
+begin
+BUTTON_IN_Q <= BUTTON_IN;
+BUTTON_IN_2Q <= BUTTON_IN_Q;
+BUTTON_IN_3Q <= BUTTON_IN_2Q;
+end
+end
+wire BUTTON_OUT = BUTTON_IN_2Q | BUTTON_IN_3Q;
+endmodule
+
+//module xuanpiao(
+// coin_10,coin_5,coin_1,       //10,5,1元纸币  BTN5,BTN4,BTN3
+ 
+
+
+/******七段数码管显示******/
+
+`timescale 1 ns / 1 ps 
+ module scan_seg ( rst ,clk ,DIG ,Y ); 
+ input rst ;
+ wire rst ;
+ input clk ;
+ wire clk ;
+ 
+ output [7:0] DIG ;
+ wire [7:0] DIG ;
+ output [7:0] Y ;
+ wire [7:0] Y ;
+ 
+ reg clkout ;
+ reg [31:0]cnt;  
+ reg [2:0]scan_cnt ;     
+ 
+ parameter  period= 100000;
+ 
+ assign Y = {1'b1,(~Y_r[6:0])};
+ assign DIG =~DIG_r;
+ reg [6:0] Y_r;
+ reg [7:0] DIG_r ;
+ 
+ always @( posedge clk or negedge rst)      //分频50Hz
+     begin 
+     if (!rst)
+         cnt <= 0 ;
+     else  begin  
+             cnt<= cnt+1;
+       if (cnt    == (period >> 1) - 1)               
+                 clkout <= #1 1'b1;
+         else if (cnt == period - 1)                    
+             begin 
+                 clkout <= #1 1'b0;
+                  cnt <= #1 'b0;      
+             end
+          
+         end
+     end
+ 
+ always @(posedge clkout or negedge rst)          
+     begin 
+       if (!rst)
+         scan_cnt <= 0 ;
+     else  begin
+         scan_cnt <= scan_cnt + 1;    
+         if(scan_cnt==3'd7)  scan_cnt <= 0;
+         end 
+     end
+     
+ always @( scan_cnt)         //数码管选择
+     begin 
+     case ( scan_cnt )    
+         3'b000 : DIG_r <= 8'b0000_0001;    
+         3'b001 : DIG_r <= 8'b0000_0010;    
+         3'b010 : DIG_r <= 8'b0000_0100;    
+         3'b011 : DIG_r <= 8'b0000_1000;    
+         3'b100 : DIG_r <= 8'b0001_0000;    
+         3'b101 : DIG_r <= 8'b0010_0000;    
+         3'b110 : DIG_r <= 8'b0100_0000;     
+         3'b111 : DIG_r <= 8'b1000_0000;    
+         default :DIG_r <= 8'b0000_0000;    
+     endcase
+     end
+ 
+ always @ (scan_cnt ) //译码
+     begin 
+     case (scan_cnt)
+         0: Y_r = 7'b0111111; // 0
+         1: Y_r = 7'b0000110; // 1
+         2: Y_r = 7'b1011011; // 2
+         3: Y_r = 7'b1001111; // 3
+         4: Y_r = 7'b1100110; // 4
+         5: Y_r = 7'b1101101; // 5
+         6: Y_r = 7'b1111101; // 6
+         7: Y_r = 7'b0100111; // 7
+         8: Y_r = 7'b1111111; // 8
+         9: Y_r = 7'b1100111; // 9
+         10: Y_r = 7'b1110111; // A
+         11: Y_r = 7'b1111100; // b
+         12: Y_r = 7'b0111001; // c
+         13: Y_r = 7'b1011110; // d
+         14: Y_r = 7'b1111001; // E
+         15: Y_r = 7'b1110001; // F
+         default: Y_r = 7'b0000000;
+     endcase
+     end    
+     
+ endmodule
+ 
+ 
